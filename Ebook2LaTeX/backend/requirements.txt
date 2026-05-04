@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pydantic
+python-multipart
+sqlalchemy
+pymupdf==1.24.3
+pix2tex
+alembic
+python-dotenv
+psycopg[binary]

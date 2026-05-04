@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Environment
+.env
+*.env.local
+
+# Uploads (user data – never commit)
+backend/uploads/
+
+# Node / Frontend
+node_modules/
+.npm
+
+# Vite build output
+frontend/dist/
+frontend/.vite/
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Alembic (generated migration files handled separately)
+backend/alembic/versions/*.pyc
+
+.claude
+.obsidian
