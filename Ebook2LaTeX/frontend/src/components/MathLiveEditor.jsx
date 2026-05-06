@@ -65,7 +65,7 @@ function MathLiveEditor({ value = '', onChange, readOnly = false, id }) {
       <math-field
         ref={mathFieldRef}
         id={id}
-        class="block w-full text-gray-100"
+        class="block w-full text-gray-900 bg-white"
         style={{ minHeight: '3rem' }}
       />
     </div>

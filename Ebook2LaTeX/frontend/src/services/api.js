@@ -17,7 +17,7 @@ const api = axios.create({
   headers: {
     Accept: 'application/json',
   },
-  timeout: 30_000, // 30 s – generous for OCR processing
+  timeout: 300_000, // 5 phút - AI OCR bằng CPU có thể tốn nhiều thời gian
 });
 
 // ── Request interceptor ────────────────────────────────────────────
