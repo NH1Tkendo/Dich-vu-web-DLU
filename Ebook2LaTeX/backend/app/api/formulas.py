@@ -1,12 +1,15 @@
 """
 Formulas router – GET / PUT / POST (batch) endpoints.
-All responses are mock data in Phase 1.
+Manages formula entries in the database.
 """
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Path, Query, status
+from fastapi import APIRouter, Path, Query, status, Depends, HTTPException
+from sqlalchemy.orm import Session
 
+from app.core.database import get_db
+from app.models import FormulaEntry, Document
 from app.schemas.formula import (
     BatchUpdateResponse,
     FormulaBatchUpdate,
@@ -16,34 +19,6 @@ from app.schemas.formula import (
 )
 
 router = APIRouter(prefix="/formulas", tags=["formulas"])
-
-# ---------------------------------------------------------------------------
-# In-memory mock store (Phase 1 only – replaced by DB in Phase 3+)
-# ---------------------------------------------------------------------------
-_MOCK_STORE: dict[str, FormulaResponse] = {}
-
-
-def _seed_store(document_id: uuid.UUID) -> list[FormulaResponse]:
-    """Lazily populate the mock store for a document_id."""
-    now = datetime.now(tz=timezone.utc)
-    seeds = [
-        (uuid.uuid4(), r"a^2 + b^2 = c^2", "pending"),
-        (uuid.uuid4(), r"\nabla \cdot \vec{E} = \frac{\rho}{\varepsilon_0}", "pending"),
-        (uuid.uuid4(), r"F = G \frac{m_1 m_2}{r^2}", "reviewed"),
-    ]
-    entries = [
-        FormulaResponse(
-            id=fid,
-            document_id=document_id,
-            raw_latex=latex,
-            status=st,
-            updated_at=now,
-        )
-        for fid, latex, st in seeds
-    ]
-    for e in entries:
-        _MOCK_STORE[str(e.id)] = e
-    return entries
 
 
 # ---------------------------------------------------------------------------
@@ -58,24 +33,42 @@ async def list_formulas(
     document_id: uuid.UUID = Path(...),
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(10, ge=1, le=100, description="Items per page"),
+    db: Session = Depends(get_db),
 ) -> PaginatedFormulaResponse:
     """
-    Return paginated formula entries for a document.
-
-    **Phase 1 – Mock:** Seeds 3 fake formulas if the store is empty.
+    Return paginated formula entries for a document from database.
     """
-    # Seed if first call for this document
-    if not _MOCK_STORE:
-        _seed_store(document_id)
-
-    all_items = list(_MOCK_STORE.values())
+    # Verify document exists
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    # Query formulas with pagination
+    query = db.query(FormulaEntry).filter(
+        FormulaEntry.document_id == document_id
+    ).order_by(FormulaEntry.order_index)
+    
+    total = query.count()
     start = (page - 1) * page_size
-    end = start + page_size
+    items = query.offset(start).limit(page_size).all()
+    
     return PaginatedFormulaResponse(
-        total=len(all_items),
+        total=total,
         page=page,
         page_size=page_size,
-        items=all_items[start:end],
+        items=[
+            FormulaResponse(
+                id=item.id,
+                document_id=item.document_id,
+                raw_latex=item.latex_content,
+                status=item.status,
+                updated_at=item.updated_at,
+            )
+            for item in items
+        ],
     )
 
 
@@ -90,32 +83,39 @@ async def list_formulas(
 async def update_formula(
     payload: FormulaUpdate,
     formula_id: uuid.UUID = Path(...),
+    db: Session = Depends(get_db),
 ) -> FormulaResponse:
     """
     Update `raw_latex` (and optionally `status`) for a single formula.
-
-    **Phase 1 – Mock:** Updates the in-memory store.
     """
-    key = str(formula_id)
-    if key not in _MOCK_STORE:
-        # Create a stub entry so the UI can still function
-        _MOCK_STORE[key] = FormulaResponse(
-            id=formula_id,
-            document_id=uuid.uuid4(),
-            raw_latex=payload.raw_latex,
-            status=payload.status or "pending",
-            updated_at=datetime.now(tz=timezone.utc),
+    formula = db.query(FormulaEntry).filter(FormulaEntry.id == formula_id).first()
+    if not formula:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Formula not found"
         )
-    else:
-        existing = _MOCK_STORE[key]
-        _MOCK_STORE[key] = existing.model_copy(
-            update={
-                "raw_latex": payload.raw_latex,
-                "status": payload.status or existing.status,
-                "updated_at": datetime.now(tz=timezone.utc),
-            }
+    
+    try:
+        formula.latex_content = payload.raw_latex
+        if payload.status:
+            formula.status = payload.status
+        formula.updated_at = datetime.now(tz=timezone.utc)
+        db.commit()
+        db.refresh(formula)
+        
+        return FormulaResponse(
+            id=formula.id,
+            document_id=formula.document_id,
+            raw_latex=formula.latex_content,
+            status=formula.status,
+            updated_at=formula.updated_at,
         )
-    return _MOCK_STORE[key]
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update formula: {str(e)}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -129,34 +129,30 @@ async def update_formula(
 )
 async def batch_update_formulas(
     payload: FormulaBatchUpdate,
+    db: Session = Depends(get_db),
 ) -> BatchUpdateResponse:
     """
-    Apply a batch of formula updates atomically.
-
-    **Phase 1 – Mock:** Applies updates to the in-memory store and returns
-    the count of affected records.
+    Apply a batch of formula updates atomically to database.
     """
     updated = 0
-    now = datetime.now(tz=timezone.utc)
-    for item in payload.formulas:
-        key = str(item.id)
-        if key in _MOCK_STORE:
-            existing = _MOCK_STORE[key]
-            _MOCK_STORE[key] = existing.model_copy(
-                update={
-                    "raw_latex": item.raw_latex,
-                    "status": item.status or "submitted",
-                    "updated_at": now,
-                }
-            )
-        else:
-            _MOCK_STORE[key] = FormulaResponse(
-                id=item.id,
-                document_id=uuid.uuid4(),
-                raw_latex=item.raw_latex,
-                status=item.status or "submitted",
-                updated_at=now,
-            )
-        updated += 1
-
-    return BatchUpdateResponse(success=True, updated_count=updated)
+    try:
+        for item in payload.formulas:
+            formula = db.query(FormulaEntry).filter(
+                FormulaEntry.id == item.id
+            ).first()
+            
+            if formula:
+                formula.latex_content = item.raw_latex
+                if item.status:
+                    formula.status = item.status
+                formula.updated_at = datetime.now(tz=timezone.utc)
+                updated += 1
+        
+        db.commit()
+        return BatchUpdateResponse(success=True, updated_count=updated)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Batch update failed: {str(e)}"
+        )

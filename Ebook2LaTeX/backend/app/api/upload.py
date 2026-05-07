@@ -1,14 +1,17 @@
 """
 POST /api/v1/upload
-Upload a PDF file and return document metadata (mock in Phase 1).
+Upload a PDF file and save document to database.
 """
 import os
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, UploadFile, status, Depends
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.database import get_db
+from app.models import Document
 from app.schemas.document import DocumentResponse
 
 router = APIRouter(prefix="/upload", tags=["upload"])
@@ -22,9 +25,10 @@ router = APIRouter(prefix="/upload", tags=["upload"])
 )
 async def upload_document(
     file: UploadFile = File(..., description="PDF file to upload"),
+    db: Session = Depends(get_db),
 ) -> DocumentResponse:
     """
-    Accept a PDF file upload and save it locally.
+    Accept a PDF file upload, save it locally, and store metadata in database.
     """
     if file.content_type not in ("application/pdf",):
         raise HTTPException(
@@ -54,8 +58,26 @@ async def upload_document(
     with open(file_path, "wb") as f:
         f.write(content)
 
-    return DocumentResponse(
-        id=doc_id,
-        filename=file.filename or "unnamed.pdf",
-        created_at=datetime.now(tz=timezone.utc),
-    )
+    # --- Save document metadata to database ---
+    try:
+        db_document = Document(
+            id=doc_id,
+            file_name=file.filename or "unnamed.pdf",
+            file_path_url=file_path,
+            status="Pending",  # Status: Pending, Processed, Error
+        )
+        db.add(db_document)
+        db.commit()
+        db.refresh(db_document)
+        
+        return DocumentResponse(
+            id=db_document.id,
+            filename=db_document.file_name,
+            created_at=db_document.upload_date,
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to save document to database: {str(e)}"
+        )

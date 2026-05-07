@@ -1,21 +1,11 @@
-/**
- * api.js – Centralised Axios instance for Ebook2LaTeX backend communication.
- *
- * Base URL is read from the Vite environment variable VITE_API_BASE_URL
- * (defined in frontend/.env).  Falls back to http://localhost:8000 for local dev.
- *
- * Usage:
- *   import api from '@/services/api';
- *   const res = await api.post('/upload', formData);
- */
-import axios from 'axios';
+import axios from "axios";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 const api = axios.create({
   baseURL: `${BASE_URL}/api/v1`,
   headers: {
-    Accept: 'application/json',
+    Accept: "application/json",
   },
   timeout: 300_000, // 5 phút - AI OCR bằng CPU có thể tốn nhiều thời gian
 });
@@ -23,8 +13,6 @@ const api = axios.create({
 // ── Request interceptor ────────────────────────────────────────────
 api.interceptors.request.use(
   (config) => {
-    // TODO (Phase 3): attach auth token if needed
-    // config.headers.Authorization = `Bearer ${getToken()}`;
     return config;
   },
   (error) => Promise.reject(error),
@@ -34,11 +22,12 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    const status  = error.response?.status;
-    const detail  = error.response?.data?.detail;
-    const message = detail?.message ?? error.message ?? 'An unexpected error occurred.';
+    const status = error.response?.status;
+    const detail = error.response?.data?.detail;
+    const message =
+      detail?.message ?? error.message ?? "An unexpected error occurred.";
 
-    console.error(`[API] ${status ?? 'Network'} — ${message}`, error);
+    console.error(`[API] ${status ?? "Network"} — ${message}`, error);
 
     // Re-throw a normalised error so components can display it
     return Promise.reject({ status, message, raw: error });
@@ -50,9 +39,9 @@ export default api;
 // ── Typed API helpers (Phase 1 – mock endpoints) ──────────────────
 export const uploadDocument = (file) => {
   const formData = new FormData();
-  formData.append('file', file);
-  return api.post('/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+  formData.append("file", file);
+  return api.post("/upload", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
   });
 };
 
@@ -66,4 +55,4 @@ export const updateFormula = (formulaId, payload) =>
   api.put(`/formulas/${formulaId}`, payload);
 
 export const batchUpdateFormulas = (formulas) =>
-  api.post('/formulas/batch', { formulas });
+  api.post("/formulas/batch", { formulas });

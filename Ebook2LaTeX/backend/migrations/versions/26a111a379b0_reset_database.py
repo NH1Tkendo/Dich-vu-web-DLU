@@ -1,8 +1,8 @@
-"""Tao cac bang ban dau cho Ebook2LateX
+"""reset_database
 
-Revision ID: 9da51bb18278
+Revision ID: 26a111a379b0
 Revises: 
-Create Date: 2026-05-04 02:14:55.828455
+Create Date: 2026-05-07 10:22:34.582098
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = '9da51bb18278'
+revision: str = '26a111a379b0'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -48,6 +48,7 @@ def upgrade() -> None:
     sa.Column('document_id', sa.UUID(), nullable=False),
     sa.Column('raw_image_path', sa.Text(), nullable=True),
     sa.Column('latex_content', sa.Text(), nullable=True),
+    sa.Column('status', sa.String(length=20), nullable=True),
     sa.Column('order_index', sa.Integer(), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),

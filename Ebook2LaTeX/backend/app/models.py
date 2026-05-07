@@ -45,6 +45,7 @@ class FormulaEntry(Base):
     document_id = Column(UUID(as_uuid=True), ForeignKey('documents.id', ondelete='CASCADE'), nullable=False)
     raw_image_path = Column(Text)
     latex_content = Column(Text)
+    status = Column(String(20), default='pending')  # pending, reviewed, submitted
     order_index = Column(Integer, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

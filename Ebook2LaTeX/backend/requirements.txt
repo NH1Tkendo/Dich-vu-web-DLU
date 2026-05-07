@@ -9,3 +9,6 @@ pix2tex
 alembic
 python-dotenv
 psycopg[binary]
+Pillow>=9.0.0
+reportlab>=4.0.0
+matplotlib>=3.5.0

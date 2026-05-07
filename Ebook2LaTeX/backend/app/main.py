@@ -6,6 +6,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import formulas, process, upload
 from app.core.config import settings
+from app.core.database import engine
+from app.models import Base
+
+# Initialize database tables
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title=settings.APP_NAME,
